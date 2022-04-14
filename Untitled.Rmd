@@ -1,0 +1,987 @@
+---
+title: "Untitled"
+author: "Amelia Renner"
+date: "4/13/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(raster)
+library(rgdal)
+library(maptools)
+
+#streams (catogorical)
+stream_raster=raster("streams_proj.tif")
+plot(stream_raster)
+stream_raster
+##resolution: 9.4379e-05*
+
+stream_raster=raster("perenial_buf.tif")
+plot(stream_raster)
+stream_raster
+
+#soil 
+loi_soil_JULY=raster("loi_soil_10m")
+plot(loi_soil_raster)
+loi_soil_JULY
+##resolution: 9.427e-05 higher
+agro_soil_JULY=raster("agro_soil_10m")
+agro_soil_JULY
+##resolution: 9.427e-05 higher
+
+#dryland substrate age (categorical)
+dryland_raster=raster("dryland_proj.tif")
+plot(dryland_raster)
+dryland_raster
+##resolution: 9.43794e-05* higher
+
+#coast buffer (categorical)
+coast_raster=raster("coast_proj1.tif")
+plot(coast_raster)
+coast_raster
+##resolution: 9.42471e-05* higher
+
+#elevation (continuous)
+elevation_raster=raster("dem_wgs_mask.tif")
+plot(elevation_raster)
+elevation_raster
+##resolution: 9.4e-05* 
+
+#slope (continuous)
+slope_raster=raster("slopemask_pro.tif")
+plot(slope_raster)
+slope_raster
+##resolution: 9.427e-05 higher
+
+##climate
+rain_raster=raster("bio12_2000.tif")
+##resolution = 0.002357 lower
+rain2100=raster("bio12_2100.tif")
+temperature=raster("bio1_2000.tif")
+temperature2100=raster("bio1_2100.tif")
+##resolution = 0.002357 lower
+
+#soil fertility 10/27/15
+fertility=raster("rei_com_proj.tif")
+plot(fertility)
+##resolution = 0.002357
+
+#substrate age REI cateogries
+age_rei=raster("rei_oct2_proj")
+plot(age_rei)
+#resolution= 9.4267e-05
+
+#template raster 10m
+temp_raster10=raster("tmp_wgs_10m")
+plot(temp_raster10)
+temp_raster10
+##resoltuion: 9.4e-05
+
+#development & SLUD
+development=raster("development_Proj.tif")
+development
+plot(development)
+
+alish=raster("alish.tif")
+alish
+plot(alish)
+alish[alish%in%c(0)]=NA
+
+##RCP 4.5 2049-2099
+temp_RCP45=raster("bio1_2070_2099_RCP45.tif")
+rain_RCP45=raster("bio12_RCP45_250m_new.tif")
+
+#RCP 8.5 2049-2099
+temp_RCP85=raster("bio1_2070_2099_RCP85.tif")
+rain_RCP85=raster("bio12_RCP85_250m_new.tif")
+
+
+##align rain raster to 10m
+##align LOW res layers to high res temp align(x, temp)
+align_files_high_res_mean=function(low_res_raster, high_res_raster){
+  high_res_raster_proj=projection(high_res_raster)
+  low_res_raster_proj=projection(low_res_raster)
+  low_res_raster_proj_res=res(low_res_raster)[1]
+  high_res_raster_proj_res=res(high_res_raster)[1]
+  res_ratio=round(low_res_raster_proj_res/high_res_raster_proj_res)
+  tmp_raster=disaggregate(low_res_raster,fact=res_ratio,method='')
+  tmp_raster2=extend(high_res_raster,tmp_raster,value=NA)
+  tmp_raster=resample(tmp_raster, tmp_raster2,  method="ngb")
+  (tmp_raster)
+}
+
+rain10m=align_files_high_res_mean(rain_raster,temp_raster10)
+rain10m
+writeRaster(rain10m, "rain10m.tif", format="GTiff")
+rain10m=raster("rain10m.tif")
+
+fertility10=align_files_high_res_mean(fertility,temp_raster10)
+fertility10
+writeRaster(fertility10, "fertility10.tif", format="GTiff", overwrite=T)
+
+temp_2100_10=align_files_high_res_mean(temperature2100,temp_raster10)
+temp_2100_10
+writeRaster(temp_2100_10, "temp_2100_10.tif", format='GTiff', overwrite=T)
+
+develop_10=align_files_high_res_mean(development,temp_raster10)
+develop_10
+writeRaster(develop_10, "develop_10.tif", format='GTiff', overwrite=T)
+
+temp_RCP45_10=align_files_high_res_mean(temp_RCP45, temp_raster10)
+temp_RCP45_10
+writeRaster(temp_RCP45_10, "temp_RCP45_10.tif", format='GTiff', overwrite=T)
+
+rain_RCP45_10=align_files_high_res_mean(rain_RCP45, temp_raster10)
+rain_RCP45_10
+writeRaster(rain_RCP45_10, "rain_RCP45_10_new.tif", format='GTiff', overwrite=T)
+
+temp_RCP85_10=align_files_high_res_mean(temp_RCP85, temp_raster10)
+temp_RCP85_10
+writeRaster(temp_RCP85_10, "temp_RCP85_10_new.tif", format='GTiff', overwrite=T)
+
+rain_RCP85_10=align_files_high_res_mean(rain_RCP85, temp_raster10)
+rain_RCP85_10
+writeRaster(rain_RCP85_10, "rain_RCP85_10.tif", format='GTiff', overwrite=T)
+
+##high resolution to low res
+align_files_low_res_cont=function(low_res_raster, high_res_raster){
+  high_res_raster_proj=projection(high_res_raster)
+  low_res_raster_proj=projection(low_res_raster)
+  low_res_raster_proj_res=res(low_res_raster)[1]
+  high_res_raster_proj_res=res(high_res_raster)[1]
+  res_ratio=round(low_res_raster_proj_res/high_res_raster_proj_res) 
+  tmp_raster=aggregate(high_res_raster,fact=res_ratio,fun=mean, expand=T)  
+  tmp_raster=resample(tmp_raster, low_res_raster,  method="ngb")
+  (tmp_raster)
+}
+
+loi_soil10=align_files_high_res_mean(loi_soil_JULY, temp_raster10)
+loi_soil10
+writeRaster(loi_soil10, "loi_soil_10", format="GTiff", overwrite=T)
+loi_soil10=loi_soil10>0
+
+agro_soil10=align_files_high_res_mean(agro_soil_JULY, temp_raster10)
+agro_soil10
+writeRaster(agro_soil10, "agro_soil10", format="GTiff", overwrite=T)
+agro_soil10=raster("agro_soil10.tif")
+agro_soil10=agro_soil10>0
+
+slope10=align_files_high_res_mean(slope_raster,temp_raster10)
+slope10
+writeRaster(slope10, "slope10", format="GTiff", overwrite=T)
+slope10=raster("slope10.tif")
+
+
+elevation10=align_files_high_res_mean(elevation_raster, temp_raster10)
+elevation10
+writeRaster(elevation10,"elevation10",format="GTiff", overwrite=T)
+elevation10=raster("elevation10.tif")
+
+substrate10=align_files_high_res_mean(dryland_raster, temp_raster10)
+substrate10
+writeRaster(substrate10, "substrate10", format="GTiff", overwrite=T)
+substrate10=raster("substrate10.tif")
+plot(substrate10)
+
+coast10=align_files_high_res_mean(coast_raster, temp_raster10)
+coast10
+writeRaster(coast10, "coast10", format="GTiff", overwrite=T)
+
+stream10=align_files_high_res_mean(stream_raster, temp_raster10)
+stream10=raster("stream10_perennial.tif")
+stream10
+plot(stream10)
+writeRaster(stream10,"stream10_perennial.tif", format="GTiff", overwrite=T)
+stream10=stream10>-1
+
+rain2100_10=align_files_high_res_mean(rain2100,temp_raster10)
+rain2100_10=raster("rain2100_10.tif")
+writeRaster(rain2100_10,"rain2100_10", format="GTiff", overwrite=T)
+
+age_rei10=align_files_high_res_mean(age_rei,temp_raster10)
+age_rei10
+writeRaster(age_rei10, "age_rei10", format= 'GTiff', overwrite=T) 
+age_rei10=raster("age_rei10.tif")
+
+fert_temp_align=align_files_low_res_cont(temperature2100,fertility)
+fert_temp_align
+writeRaster(fert_temp_align, "fert_temp_align.tif", format= 'GTiff')
+
+#ENVELOPE
+
+#vector_obj=temp_limits
+#raster_obj=temp_raster
+envelope_single_var=function(raster_obj, vector_obj){
+  minVal=cellStats(raster_obj,stat='min', na.rm=T)
+  maxVal=cellStats(raster_obj,stat='max', na.rm=T)
+  reclass_table=data.frame(from=c(minVal, vector_obj), to=c(vector_obj, maxVal), 
+                           becomes=c(0,1,0))
+  raster_envelope=reclassify(raster_obj,reclass_table, include.lowest=T)
+  return(raster_envelope)
+}
+
+##envelope that includes 0, 8/7/15
+envelope_single_var0=function(raster_obj, vector_obj){
+  minVal=cellStats(raster_obj,stat='min', na.rm=T)
+  maxVal=cellStats(raster_obj,stat='max', na.rm=T)
+  reclass_table=data.frame(from=c(minVal, vector_obj), to=c(vector_obj, maxVal), 
+                           becomes=c(0,1,0))
+  reclass_table$interval=reclass_table$to-reclass_table$from
+  reclass_table=reclass_table[reclass_table$interval>0,c("from", "to", "becomes")]
+  raster_envelope=reclassify(raster_obj,reclass_table, include.lowest=T)
+  return(raster_envelope)
+}
+## creates a table (from, to, becomes), one row- too low, middle row- within, last - any values
+## above the max.  
+
+#rain envelope
+agro_rain_limit=c(750,10206.87)
+dry_rain_limit=c(750,1600)
+
+rain10m=raster("rain10m.tif")
+rain10m
+
+agro_rain_envelope10=envelope_single_var0(rain10m, agro_rain_limit)
+agro_rain_envelope10
+writeRaster(agro_rain_envelope10, 'agro_rain_envelope10', format="GTiff", overwrite=T)
+
+dry_rain_envelope10=envelope_single_var(rain10m, dry_rain_limit)
+dry_rain_envelope10
+writeRaster(dry_rain_envelope10, 'dry_rain_envelope10', format="GTiff", overwrite=T)
+
+##elevation envelope
+loi_elevation_limit=c(0,415)
+agro_elevation_limit=c(0,885)
+dry_elevation_limit=c(0,885)
+
+elevation_raster=raster("elevation10.tif")
+loi_elevation10=envelope_single_var0(elevation_raster, loi_elevation_limit)
+writeRaster(loi_elevation10, "loi_elevation10.tif", format="GTiff", overwrite=T)
+agro_elevation10=envelope_single_var0(elevation_raster,agro_elevation_limit)
+writeRaster(agro_elevation10, "agro_elevation10.tif", format="GTiff", overwrite=T)
+writeRaster(agro_elevation10, "dry_elevation10.tif", format="GTiff", overwrite=T)
+
+##slope envelope
+loi_slope_limit=c(0,10)
+agro_slope_limit=c(0,30)
+dryland_slope_limit=c(0,12)
+
+slope_raster=raster("slope10.tif")
+loi_slope_envelope10=envelope_single_var0(slope_raster, loi_slope_limit)
+loi_slope_envelope10
+writeRaster(loi_slope_envelope10, "loi_slope_envelope10.tif", format="GTiff", overwrite=T)
+loi_slope_envelope10=raster("loi_slope_envelope10.tif")
+
+agro_slope_envelope10=envelope_single_var0(slope_raster, agro_slope_limit)
+agro_slope_envelope10
+writeRaster(agro_slope_envelope10, "agro_slope_envelope10.tif", format="GTiff", overwrite=T)
+
+dryland_slope_envelope10=envelope_single_var0(slope_raster, dryland_slope_limit)
+dryland_slope_envelope10
+writeRaster(dryland_slope_envelope10, "dryland_slope_10", format="GTiff", overwrite=T)
+
+##Intersections
+
+##loi (streams, soil, slope, elevation)
+loi_stream_int=raster("stream10_perennial.tif")
+loi_soil_int=raster("loi_soil_10.tif")
+loi_slope_int=raster("loi_slope_envelope10.tif")
+loi_elevation_int=raster("loi_elevation10.tif")
+
+loi_stream_int
+loi_soil_int
+loi_slope_int[loi_slope_int%in%c(0)]=NA
+loi_slope_int
+loi_elevation_int[loi_elevation_int%in%c(0)]=NA
+loi_elevation_int
+
+loi_int10_2=(loi_stream_int)*(loi_soil_int)*(loi_slope_int)*(loi_elevation_int)
+
+split_into_island_raster=function(raster_img){
+  # Defining the extent of the different islands
+  Kauai = c(-159.82,-159.26, 21.84, 22.25)
+  Oahu = c(-158.32, -157.62,  21.22, 21.73)
+  Maui_nui=c(-157.34,-155.9,20.46, 21.25)
+  #Molokai = c(-157.34, -156.69, 21.03, 21.25)
+  #Lanai = c(-157.08, -156.78, 20.70, 20.92)
+  #Maui= c(-156.8, -155.53, 20.46, 21.05)
+  #Kahoolawe = c(-156.8, -156.51, 20.46, 20.62)
+  Hawaii = c(-156.10,-154.74, 18.87, 20.30)
+  
+  islands=c("Kauai", "Oahu", "Maui_nui", "Hawaii")
+  
+  # Cutting out each island
+  #island="Kauai"
+  for (island in islands){
+    e = extent(get(island))
+    Isras = crop(raster_img, e, snap = 'in')
+    str=paste0(island, "_", substitute(raster_img))
+    assign(str, Isras)
+    writeRaster(Isras, paste0(str, ".tif"), overwrite = TRUE) #saves the RasterStack to a file and location indicated above 
+  }  
+}
+
+split_into_island_raster(loi_int10_2)
+
+oahu_loi_int10=raster("Oahu_loi_int10_2.tif")
+oahu_loi_int10[oahu_loi_int10%in%c(0)]=NA
+writeRaster(oahu_loi_int10, "Oahu_loi_int10_2.tif", format="GTiff", overwrite=T)
+oahu_loi_int10=raster("Oahu_loi_int10.tif")
+
+kauai_loi_int10=raster("kauai_loi_int10.tif")
+kauai_loi_int10[kauai_loi_int10%in%c(0)]=NA
+writeRaster(kauai_loi_int10, "Kauai_loi_int10.tif", format="GTiff", overwrite=T)
+kauai_loi_int10=raster("Kauai_loi_int10.tif")
+
+maui_loi_int10=raster("Maui_nui_loi_int10_2.tif")
+maui_loi_int10[maui_loi_int10%in%c(0)]=NA
+writeRaster(maui_loi_int10, "Maui_loi_int10_2.tif", format="GTiff", overwrite=T)
+maui_loi_int10=raster("Maui_loi_int10.tif")
+
+hawaii_loi_int10=raster("Hawaii_loi_int10.tif")
+hawaii_loi_int10[hawaii_loi_int10%in%c(0)]=NA
+hawaii_loi_int10
+writeRaster(hawaii_loi_int10, "Hawaii_loi_int10.tif", format="GTiff", overwrite=T)
+hawaii_loi_int10=raster("Hawaii_loi_int10.tif")
+
+##zeros to N/As
+r[r%in%c(1,2,3)] <- 1
+loi_int10[loi_int10%in%c(0)]=NA
+writeRaster(loi_int10, "loi_int_final10.tif", format= 'GTiff')
+loi_int_final10=raster("loi_int_final10.tif")
+
+##agroforestry (soil, slope, elevation, rainfall, minus loi)
+agro_soil_int=raster("agro_soil10.tif")
+agro_slope_int=raster("agro_slope_envelope10.tif")
+agro_elevation_int=raster("agro_elevation10.tif")
+agro_rain_int=raster("agro_rain_envelope10.tif")
+#agro minus loi
+
+split_into_island_raster(agro_int10.1)
+Oahu_agro10=raster("Oahu_agro_int10.1.tif")
+Oahu_agro10[Oahu_agro10%in%c(0)]=NA
+writeRaster(Oahu_agro10, "Oahu_agro_int10.1.tif", format="GTiff", overwrite=T)
+
+Kauai_agro10=raster("Kauai_agro_int10.1.tif")
+Kauai_agro10[Kauai_agro10%in%c(0)]=NA
+writeRaster(Kauai_agro10, "Kauai_agro_int10.1.tif", format="GTiff", overwrite=T)
+plot(Kauai_agro10)
+
+Maui_nui_agro10=raster("Maui_nui_agro_int10.1.tif")
+Maui_nui_agro10[Maui_nui_agro10%in%c(0)]=NA
+writeRaster(Maui_nui_agro10, "Oahu_agro_int10.1.tif", format="GTiff", overwrite=T)
+
+Hawaii_agro10=raster("Hawaii_agro_int10.1.tif")
+Hawaii_agro10[Hawaii_agro10%in%c(0)]=NA
+writeRaster(Hawaii_agro10, "Hawaii_agro_int10.1.tif", format="GTiff", overwrite=T)
+
+Oahu_agro_final10=mask(Oahu_agro10, oahu_loi_int10, inverse=T, "Oahu_agro_final10.tif")
+plot(Oahu_agro_final10)
+Oahu_agro_final10=raster("Oahu_agro_final10.tif")
+
+Kauai_agro_final10=mask(Kauai_agro10, kauai_loi_int10, inverse=T, "Kauai_agro_final10.tif")
+plot(Kauai_agro_final10)
+Kauai_agro_final10=raster("Kauai_agro_final10.tif")
+
+Maui_agro_final10=mask(Maui_nui_agro10, maui_loi_int10, inverse=T, "Maui_agro_final10.tif")
+Maui_agro_final10
+plot(Maui_agro_final10)
+Maui_agro_final10=raster("Maui_agro_final10.tif")
+
+Hawaii_agro_final10=mask(Hawaii_agro10, hawaii_loi_int10, inverse=T, "Hawaii_agro_final10.tif")
+plot(Hawaii_agro_final10)
+Hawaii_agro_final10=raster("Hawaii_agro_final10.tif")
+
+##dryland(slope, elevation, rainfall, substrate, fertility, inland from coast)
+dry_slope_int=raster("dryland_slope_10.tif")
+dry_elevation_int=raster("agro_elevation10.tif")
+dry_rain_int=raster("dry_rain_envelope10.tif")
+dry_fertility_int=raster("fertility10.tif")
+dry_substrate_int=raster("substrate10.tif")
+dry_coast_int=raster("coast10.tif")
+
+dry_int10.11=(dry_slope_int)*(dry_elevation_int)*(dry_rain_int)*(dry_fertility_int)*(dry_substrate_int)
+dry_int10.11
+split_into_island_raster(dry_int10.11)
+
+oahu_dry_int10=raster("Oahu_dry_int10.11.tif")
+oahu_dry_int10[oahu_dry_int10%in%c(0)]=NA
+oahu_dry_int10
+writeRaster(oahu_dry_int10, "Oahu_dry_int10.11.tif", format="GTiff", overwrite=T)
+Oahu_dry_int10.11=raster("Oahu_dry_int10.11.tif")
+
+kauai_dry_int10=raster("Kauai_dry_int10.11.tif")
+kauai_dry_int10[kauai_dry_int10%in%c(0)]=NA
+writeRaster(kauai_dry_int10, "Kauai_dry_int10.11.tif", format="GTiff", overwrite=T)
+
+maui_dry_int10=raster("Maui_nui_dry_int10.11.tif")
+maui_dry_int10[maui_dry_int10%in%c(0)]=NA
+writeRaster(maui_dry_int10, "Maui_dry_int10.11.tif", format="GTiff", OVerwrite=T)
+maui_dry_int10
+
+hawaii_dry_int10=raster("Hawaii_dry_int10.11.tif")
+hawaii_dry_int10[hawaii_dry_int10%in%c(0)]=NA
+writeRaster(hawaii_dry_int10, "Hawaii_dry_int10.1.tif", format="GTiff", overwrite=T)
+
+hawaii_dry_int10=raster("Hawaii_dry_int10.1.tif")
+Kauai_dry_coast_int=raster("Kauai_dry_coast_int.tif")
+Oahu_dry_coast_int=raster("Oahu_dry_coast_int.tif")
+Maui_dry_coast_int=raster("Maui_nui_dry_coast_int.tif")
+Hawaii_dry_coast_int=raster("Hawaii_dry_coast_int.tif")
+
+Kauai_dry_final10=mask(kauai_dry_int10, Kauai_dry_coast_int, inverse=T, "Kauai_dry_final10.tif")
+Oahu_dry_final10=mask(oahu_dry_int10, Oahu_dry_coast_int, inverse=T, "Oahu_dry_final10.tif")
+Maui_dry_final10=mask(maui_dry_int10, Maui_dry_coast_int, inverse=T, "Maui_dry_final10.tif")
+Hawaii_dry_final10=mask(hawaii_dry_int10, Hawaii_dry_coast_int, inverse=T, "Hawaii_dry_final10.tif", overwrite=T)
+
+Kauai_dry_final10=raster("Kauai_dry_final10.tif")
+Oahu_dry_final10=raster("Oahu_dry_final10.tif")
+Maui_dry_final10=raster("Maui_dry_final10.tif")
+Hawaii_dry_final10=raster("Hawaii_dry_final10.tif")
+writeRaster(Hawaii_dry_final10, "Hawaii_dry_final10_2.tif", format="GTiff")
+
+##Development
+split_into_island_raster(develop_10)
+
+a=raster("Kauai_loi_int10.tif")
+b=raster("Oahu_loi_int10_2.tif")
+c=raster("Maui_loi_int10_2.tif")
+d=raster("Hawaii_loi_int10.tif")
+
+e=raster("Kauai_agro_final10.tif")
+f=raster("Oahu_agro_final10.tif")
+g=raster("Maui_agro_final10.tif")
+h=raster("Hawaii_agro_final10.tif")
+
+i=raster("Oahu_dry_final10.tif")
+j=raster("Maui_dry_final10.tif")
+k=raster("Hawaii_dry_final10.tif")
+
+KD=raster("Kauai_develop_10.tif")
+OD=raster("Oahu_develop_10.tif")
+MD=raster("Maui_nui_develop_10.tif")
+HD=raster("Hawaii_develop_10.tif")
+
+KDL=a*KD
+KDA=e*KD
+ODL=b*OD
+ODA=f*OD
+MDL=c*MD
+MDA=g*MD
+MDD=j*MD
+HDL=d*HD
+HDA=h*HD
+HDD=k*HD
+
+#******************************************************************************
+#Climate Change
+##elevation and temperature
+#correlation among rasters:
+#temperature, elevation
+elevation_low_align=align_files_low_res_cont(temperature,elevation)
+writeRaster(elevation_low_align,"elevation_low_align", format="GTiff")
+
+mat_mat=as.matrix(temperature) #convert them to matrices
+dem_mat=as.matrix(elevation_low_align)
+mat_mat1=c(mat_mat) #convert matrix to vector
+dem_mat1=c(dem_mat)
+criteria=dem_mat1<2000
+
+plot(dem_mat1[criteria], mat_mat1[criteria], xlab="Elevation (m)", ylab="MAT (C)") #plot one vector versus another
+#lm=lm((mat_mat1[criteria])~(dem_mat1[criteria])
+#abline(lm(mat_mat1[criteria]~dem_mat1[criteria]), col="red")
+text(-1.5,0.1,"y = 23.67 - 0.006405x", col="red")
+lm=(lm(mat_mat1[criteria]~dem_mat1[criteria]))
+summary(lm)
+#Y = 23.67 – 0.006405x (up to 2000m)
+
+plot(dem_mat1, mat_mat1, xlab="Elevation (m)", ylab="MAT (C)")
+cor(mat_mat1, dem_mat1, use="complete.obs")
+
+##up to 1000m
+criteria2=dem_mat1<1000
+plot(dem_mat1[criteria2], mat_mat1[criteria2], xlab="Elevation (m)", ylab="MAT (C)") #plot one vector versus another
+lm=lm((mat_mat1[criteria2])~(dem_mat1[criteria2]))
+abline(lm((mat_mat1[criteria2])~(dem_mat1[criteria2])), col="red")
+lm2=lm((mat_mat1[criteria2])~(dem_mat1[criteria2]))
+summary(lm2)
+
+##future temperature and elevation 
+temperature2100=raster("bio1_2100.tif")
+elevation_low_align=raster("elevation_low_align.tif")
+
+mat_mat=as.matrix(temperature2100) #convert them to matrices
+dem_mat=as.matrix(elevation_low_align)
+mat_mat1=c(mat_mat) #convert matrix to vector
+dem_mat1=c(dem_mat)
+criteria=dem_mat1<2000
+
+mat_mat=as.matrix(elevation_low_align) #convert them to matrices
+dem_mat=as.matrix(temperature2100)
+mat_mat1=c(mat_mat) #convert matrix to vector
+dem_mat1=c(dem_mat)
+criteria=mat_mat1<2000
+#elevationY = 4073.27 - 156.0842x
+
+plot(dem_mat1[criteria], mat_mat1[criteria], xlab="Elevation (m)", ylab="MAT (C)") #plot one vector versus another
+lm=lm((mat_mat1[criteria])~(dem_mat1[criteria]))
+abline(lm(mat_mat1[criteria]~dem_mat1[criteria]), col="red")
+lm=(lm(mat_mat1[criteria]~dem_mat1[criteria]))
+summary(lm)
+#R squared: 0.9643
+#Y= 25.95 – 0.006178x
+
+plot(dem_mat1, mat_mat1, xlab="Elevation (m)", ylab="MAT (C)")
+cor(mat_mat1, dem_mat1, use="complete.obs")
+
+##future rainfall envelope
+agro_rain_limit_future=c(750,13431.59)
+dry_rain_limit_future=c(750,1600)
+rain2100_10=raster("rain2100_10.tif")
+rain2100 ## min 138.0797 max 13431.59
+
+future_agro_rain_envelope10=envelope_single_var0(rain2100_10, agro_rain_limit_future)
+writeRaster(future_agro_rain_envelope10, 'future_agro_rain_envelope10', format="GTiff")
+future_agro_rain_envelope10=raster("future_agro_rain_envelope10.tif")
+
+future_dry_rain_envelope10=envelope_single_var(rain2100_10, dry_rain_limit_future)
+writeRaster(future_dry_rain_envelope10, 'future_dry_rain_envelope10', format="GTiff", overwrite=T)
+future_dry_rain_envelope10=raster("future_dry_rain_envelope10.tif")
+
+##future elevation enevelope
+future_loi_elevation_limit=c(0,800)
+future_agro_elevation_limit=c(0,1285)
+future_dry_elevation_limit=c(0,1285)
+
+elevation_raster=raster("elevation10.tif")
+future_loi_elevation10=envelope_single_var0(elevation_raster, future_loi_elevation_limit)
+future_loi_elevation10[future_loi_elevation10%in%c(0)]=NA
+writeRaster(future_loi_elevation10, "future_loi_elevation10.tif", format="GTiff", overwrite=T)
+future_loi_elevation10=raster("future_loi_elevation10.tif")
+
+future_agro_elevation10=envelope_single_var0(elevation_raster,future_agro_elevation_limit)
+writeRaster(future_agro_elevation10, "future_agro_elevation10.tif", format="GTiff", overwrite=T)
+future_agro_elevation10=raster("future_agro_elevation10.tif")
+
+#A1B agroforesty (soil, slope, future elevation, future rainfall, minus loi)
+agro_soil_int=raster("agro_soil10.tif")
+agro_slope_int=raster("agro_slope_envelope10.tif")
+fagro_elevation_int=raster("future_agro_elevation10.tif")
+fagro_rain_int=raster("future_agro_rain_envelope10.tif")
+#agro minus loi
+
+agro_soil_int
+agro_slope_int
+fagro_elevation_int
+fagro_rain_int
+
+f2agro_int10.1=(agro_soil_int)*(agro_slope_int)*(fagro_elevation_int)*(fagro_rain_int)
+
+split_into_island_raster(f2agro_int10.1)
+Oahu_fagro10=raster("Oahu_f2agro_int10.1.tif")
+Oahu_fagro10[Oahu_fagro10%in%c(0)]=NA
+writeRaster(Oahu_fagro10, "Oahu_fagro_int10.1.tif", format="GTiff", overwrite=T)
+
+Kauai_fagro10=raster("Kauai_fagro_int10.1.tif")
+Kauai_fagro10[Kauai_fagro10%in%c(0)]=NA
+writeRaster(Kauai_fagro10, "Kauai_fagro_int10.1.tif", format="GTiff", overwrite=T)
+
+Maui_nui_fagro10=raster("Maui_nui_fagro_int10.1.tif")
+Maui_nui_fagro10[Maui_nui_fagro10%in%c(0)]=NA
+writeRaster(Maui_nui_fagro10, "Maui_fagro_int10.1.tif", format="GTiff", overwrite=T)
+
+Hawaii_fagro10=raster("Hawaii_fagro_int10.1.tif")
+Hawaii_fagro10[Hawaii_fagro10%in%c(0)]=NA
+writeRaster(Hawaii_fagro10, "Hawaii_fagro_int10.1.tif", format="GTiff", overwrite=T)
+
+FKL=raster("FKauai_loi_int10.tif")
+FOL=raster("FOahu_loi_int10.tif")
+FML=raster("FMaui_loi_int10.tif")
+FHL=raster("FHawaii_loi_int10.tif")
+
+FOahu_agro_final10=mask(Oahu_fagro10, FOL, inverse=T, "FOahu_agro_final10.tif",overwrite=T)
+FOahu_agro_final10=raster("FOahu_agro_final10.tif")
+
+FKauai_agro_final10=mask(Kauai_fagro10, FKL, inverse=T, "FKauai_agro_final10.tif",overwrite=T)
+FKauai_agro_final10=raster("FKauai_agro_final10.tif")
+
+FMaui_agro_final10=mask(Maui_nui_fagro10, FML, inverse=T, "FMaui_agro_final10.tif",overwrite=T)
+FMaui_agro_final10=raster("Maui_agro_final10.tif")
+
+FHawaii_agro_final10=mask(Hawaii_fagro10, FHL, inverse=T, "FHawaii_agro_final10.tif",overwrite=T)
+FHawaii_agro_final10=raster("FHawaii_agro_final10.tif")
+
+#A1B Dryland
+##dryland(slope, elevation, rainfall, substrate, fertility, inland from coast)
+fdry_slope_int=raster("dryland_slope_10.tif")
+fdry_elevation=raster("future_agro_elevation10.tif")
+fdry_rain_int=raster("future_dry_rain_envelope10.tif")
+fdry_fertility_int=raster("fertility10.tif")
+fdry_substrate_int=raster("substrate10.tif")
+fdry_coast_int=raster("coast10.tif")
+
+fdry_int10.11=(fdry_slope_int)*(fdry_elevation)*(fdry_rain_int)*(fdry_fertility_int)*(fdry_substrate_int)
+writeRaster(fdry_int10.11, "fdry_int10.11.tif", format="GTiff", OVerwrite=T, compress="lzw")
+split_into_island_raster(fdry_int10.11)
+
+foahu_dry_int10=raster("Oahu_fdry_int10.11.tif")
+foahu_dry_int10[foahu_dry_int10==0]=NA
+foahu_dry_int10=foahu_dry_int10>0
+foahu_dry_int10
+writeRaster(foahu_dry_int10, "Oahu_fdry_int10.11.tif", format="GTiff", overwrite=T)
+foahu_dry_int10=raster("Oahu_fdry_int10.11.tif")
+
+fmaui_dry_int10=raster("Maui_nui_fdry_int10.11.tif")
+fmaui_dry_int10[fmaui_dry_int10==0]=NA
+fmaui_dry_int10=fmaui_dry_int10>0
+writeRaster(fmaui_dry_int10, "Maui_fdry_int10.11.tif", format="GTiff", OVerwrite=T)
+fmaui_dry_int10=raster("Maui_fdry_int10.11.tif")
+
+fhawaii_dry_int10=raster("Hawaii_fdry_int10.11.tif")
+fhawaii_dry_int10[fhawaii_dry_int10==0]=NA
+fhawaii_dry_int10=fhawaii_dry_int10>0
+writeRaster(fhawaii_dry_int10, "Hawaii_fdry_int10.1.tif", format="GTiff", overwrite=T)
+fhawaii_dry_int10=raster("Hawaii_fdry_int10.1.tif")
+
+Oahu_dry_coast_int=raster("Oahu_dry_coast_int.tif")
+Maui_dry_coast_int=raster("Maui_nui_dry_coast_int.tif")
+Hawaii_dry_coast_int=raster("Hawaii_dry_coast_int.tif")
+
+FOahu_dry_final10=mask(foahu_dry_int10, Oahu_dry_coast_int, inverse=T, "Oahu_fdry_final10.tif")
+FMaui_dry_final10=mask(fmaui_dry_int10, Maui_dry_coast_int, inverse=T, "Maui_fdry_final10.tif")
+FHawaii_dry_final10=mask(fhawaii_dry_int10, Hawaii_dry_coast_int, inverse=T, "Hawaii_fdry_final10.tif", overwrite=T)
+
+##A1B Loi(streams, soil, slope, elevation)
+loi_stream_int=raster("stream10_perennial.tif")
+loi_soil_int=raster("loi_soil_10.tif")
+loi_slope_int=raster("loi_slope_envelope10.tif")
+future_loi_elevation10=raster("future_loi_elevation10.tif")
+
+Floi_int10_2=(loi_stream_int)*(loi_soil_int)*(loi_slope_int)*(future_loi_elevation10)
+split_into_island_raster(Floi_int10_2)
+
+oahu_Floi_int10=raster("oahu_Floi_int10_2.tif")
+oahu_Floi_int10[oahu_Floi_int10%in%c(0)]=NA
+writeRaster(oahu_Floi_int10, "FOahu_loi_int10_2.tif", format="GTiff", overwrite=T)
+Foahu_loi_int10=raster("FOahu_loi_int10_2.tif")
+
+kauai_Floi_int10=raster("kauai_Floi_int10.tif")
+kauai_Floi_int10[kauai_Floi_int10%in%c(0)]=NA
+writeRaster(kauai_Floi_int10, "FKauai_loi_int10.tif", format="GTiff", overwrite=T)
+Fkauai_loi_int10=raster("FKauai_loi_int10.tif")
+
+maui_Floi_int10=raster("Maui_nui_Floi_int10_2.tif")
+maui_Floi_int10[maui_Floi_int10%in%c(0)]=NA
+writeRaster(maui_Floi_int10, "FMaui_loi_int10_2.tif", format="GTiff", overwrite=T)
+Fmaui_loi_int10=raster("FMaui_loi_int10_2.tif")
+
+hawaii_Floi_int10=raster("Hawaii_Floi_int10.tif")
+hawaii_Floi_int10[hawaii_Floi_int10%in%c(0)]=NA
+writeRaster(hawaii_Floi_int10, "FHawaii_loi_int10.tif", format="GTiff", overwrite=T)
+Fhawaii_loi_int10=raster("FHawaii_loi_int10.tif")
+
+##RCP 45
+#future rainfall envelope
+       agro_rain_limit_future=c(750,9139.27)
+       dry_rain_limit_future=c(750,1600)
+       rain2100_10_RCP45=raster("rain_RCP45_10.tif")
+       rain2100_10_RCP45 ## min 151.8074 max 9139.27
+       
+       RCP45_agro_rain_envelope10=envelope_single_var0(rain2100_10_RCP45, agro_rain_limit_future)
+       writeRaster(RCP45_agro_rain_envelope10, 'RCP45_agro_rain_envelope10', format="GTiff")
+       
+       RCP45_dry_rain_envelope10=envelope_single_var0(rain2100_10_RCP45, dry_rain_limit_future)
+       writeRaster(RCP45_dry_rain_envelope10, 'RCP45_dry_rain_envelope10', format="GTiff", overwrite=T)
+       
+       ##future elevation enevelope
+       future_loi_elevation_limit=c(0,680)
+       future_agro_elevation_limit=c(0,1160) #dry limits the same
+       
+       elevation_raster=raster("elevation10.tif")
+       RCP45_loi_elevation10=envelope_single_var0(elevation_raster, future_loi_elevation_limit)
+       RCP45_loi_elevation10[RCP45_loi_elevation10%in%c(0)]=NA
+       writeRaster(RCP45_loi_elevation10, "RCP45_loi_elevation10.tif", format="GTiff", overwrite=T)
+       
+       RCP45_agro_elevation10=envelope_single_var0(elevation_raster,future_agro_elevation_limit)
+       RCP45_agro_elevation10
+       writeRaster(RCP45_agro_elevation10, "RCP45_agro_elevation10.tif", format="GTiff", overwrite=T)
+       
+       #RCP45 agroforestry envelope (soil, slope, future elevation, future rainfall, minus loi)
+       agro_soil_int=raster("agro_soil10.tif")
+       agro_slope_int=raster("agro_slope_envelope10.tif")
+       fagro_elevation_int=raster("RCP45_agro_elevation10.tif")
+       fagro_rain_int=raster("RCP45_agro_rain_envelope10.tif")
+       agro minus loi
+       
+       RCP45agro_int10.1=(agro_soil_int)*(agro_slope_int)*(fagro_elevation_int)*(fagro_rain_int)
+
+       split_into_island_raster(RCP45agro_int10.1)
+       Oahu_fagro10=raster("Oahu_RCP45agro_int10.1.tif")
+       Oahu_fagro10[Oahu_fagro10%in%c(0)]=NA
+       writeRaster(Oahu_fagro10, "Oahu_RCP45agro_int10.1.tif", format="GTiff", overwrite=T)
+       
+       Kauai_RCP45agro10=raster("Kauai_RCP45agro_int10.1.tif")
+       Kauai_RCP45agro10[Kauai_RCP45agro10%in%c(0)]=NA
+       writeRaster(Kauai_RCP45agro10, "Kauai_RCP45agro_int10.1.tif", format="GTiff", overwrite=T)
+       
+       Maui_nui_RCP45agro10=raster("Maui_nui_RCP45agro_int10.1.tif")
+       Maui_nui_RCP45agro10[Maui_nui_RCP45agro10%in%c(0)]=NA
+       writeRaster(Maui_nui_RCP45agro10, "Maui_RCP45agro_int10.1.tif", format="GTiff", overwrite=T)
+       
+       Hawaii_RCP45agro10=raster("Hawaii_RCP45agro_int10.1.tif")
+       Hawaii_RCP45agro10[Hawaii_RCP45agro10%in%c(0)]=NA
+       writeRaster(Hawaii_RCP45agro10, "Hawaii_RCP45agro_int10.1.tif", format="GTiff", overwrite=T)
+       
+       ##RCP loi
+       ##CC loi (streams, soil, slope, elevation)
+       loi_stream_int=raster("stream10_perennial.tif")
+       loi_soil_int=raster("loi_soil_10.tif")
+       loi_slope_int=raster("loi_slope_envelope10.tif")
+       future_loi_elevation10=raster("RCP45_loi_elevation10.tif")
+       
+       RCP45loi_int10=(loi_stream_int)*(loi_soil_int)*(loi_slope_int)*(future_loi_elevation10)
+       
+       split_into_island_raster(RCP45loi_int10)
+       
+       oahu_Floi_int10=raster("oahu_RCP45loi_int10.tif")
+       oahu_Floi_int10[oahu_Floi_int10%in%c(0)]=NA
+       writeRaster(oahu_Floi_int10, "Oahu_RCP45loi_int10.tif", format="GTiff", overwrite=T)
+       
+       kauai_Floi_int10=raster("kauai_RCP45loi_int10.tif")
+       kauai_Floi_int10[kauai_Floi_int10%in%c(0)]=NA
+       writeRaster(kauai_Floi_int10, "Kauai_RCP45loi_int10.tif", format="GTiff", overwrite=T)
+       
+       maui_Floi_int10=raster("Maui_nui_RCP45loi_int10.tif")
+       maui_Floi_int10[maui_Floi_int10%in%c(0)]=NA
+       writeRaster(maui_Floi_int10, "Maui_RCP45loi_int10.tif", format="GTiff", overwrite=T)
+       
+       hawaii_Floi_int10=raster("Hawaii_RCP45loi_int10.tif")
+       hawaii_Floi_int10[hawaii_Floi_int10%in%c(0)]=NA
+       writeRaster(hawaii_Floi_int10, "Hawaii_RCP45loi_int10.tif", format="GTiff", overwrite=T)
+       
+       FKL=raster("Kauai_RCP45loi_int10.tif")
+       FOL=raster("Oahu_RCP45loi_int10.tif")
+       FML=raster("Maui_RCP45loi_int10.tif")
+       FHL=raster("Hawaii_RCP45loi_int10.tif")
+       
+       Oahu_RCP45agro_final10=mask(Oahu_fagro10, FOL, inverse=T, "Oahu_RCP45agro_final10.tif",overwrite=T)
+       Kauai_RCP45agro_final10=mask(Kauai_RCP45agro10, FKL, inverse=T, "Kauai_RCP45agro_final10.tif",overwrite=T)
+       Maui_RCP45agro_final10=mask(Maui_nui_RCP45agro10, FML, inverse=T, "Maui_RCP45agro_final10.tif",overwrite=T)
+       Hawaii_RCP45agro_final10=mask(Hawaii_RCP45agro10, FHL, inverse=T, "Hawaii_RCP45agro_final10.tif",overwrite=T)
+ 
+       #Dry 2100 model 
+       ##dryland(slope, elevation, rainfall, substrate, fertility, inland from coast)
+       fdry_slope_int=raster("dryland_slope_10.tif")
+       fdry_elevation=raster("RCP45_agro_elevation10.tif")
+       fdry_rain_int=raster("RCP45_dry_rain_envelope10.tif")
+       fdry_fertility_int=raster("fertility10.tif")
+       fdry_substrate_int=raster("substrate10.tif")
+       fdry_coast_int=raster("coast10.tif")
+
+       RCP45dry_int10.11
+       plot(RCP45dry_int10.11)=(fdry_slope_int)*(fdry_elevation)*(fdry_rain_int)*(fdry_fertility_int)*(fdry_substrate_int)
+       
+       split_into_island_raster(RCP45dry_int10.11)
+       
+       foahu_dry_int10=raster("Oahu_RCP45dry_int10.11.tif")
+       foahu_dry_int10[foahu_dry_int10%in%c(0)]=NA
+       foahu_dry_int10=foahu_dry_int10>0
+       writeRaster(foahu_dry_int10, "Oahu_RCP45dry_int10.11.tif", format="GTiff", overwrite=T)
+       
+       fmaui_dry_int10=raster("Maui_nui_RCP45dry_int10.11.tif")
+       fmaui_dry_int10[fmaui_dry_int10%in%c(0)]=NA
+       fmaui_dry_int10=fmaui_dry_int10>0
+       writeRaster(fmaui_dry_int10, "Maui_RCP45dry_int10.11.tif", format="GTiff", OVerwrite=T)
+       
+       fhawaii_dry_int10=raster("Hawaii_RCP45dry_int10.11.tif")
+       fhawaii_dry_int10[fhawaii_dry_int10%in%c(0)]=NA
+       fhawaii_dry_int10=fhawaii_dry_int10>0
+       writeRaster(fhawaii_dry_int10, "Hawaii_RCP45dry_int10.11.tif", format="GTiff", overwrite=T)
+       
+       Oahu_dry_coast_int=raster("Oahu_dry_coast_int.tif")
+       Maui_dry_coast_int=raster("Maui_nui_dry_coast_int.tif")
+       Hawaii_dry_coast_int=raster("Hawaii_dry_coast_int.tif")
+       
+       FOahu_dry_final10=mask(foahu_dry_int10, Oahu_dry_coast_int, inverse=T, "Oahu_RCP45dry_final10.tif")
+       FMaui_dry_final10=mask(fmaui_dry_int10, Maui_dry_coast_int, inverse=T, "Maui_RCP45dry_final10.tif")
+       FHawaii_dry_final10=mask(fhawaii_dry_int10, Hawaii_dry_coast_int, inverse=T, "Hawaii_RCP45dry_final10.tif", overwrite=T)
+
+#Development 
+Mp1=c("Kauai_loi_int10.tif", "Kauai_develop_10.tif", "KL_nodevelop") #need to redo
+Mp2=c("Kauai_agro_final10.tif", "Kauai_develop_10.tif", "KA_nodevelop")
+Mp3=c("Oahu_loi_int10_2.tif","Oahu_develop_10.tif", "OL_nodevelop")
+Mp4=c("Oahu_dry_final10.tif", "Oahu_develop_10.tif", "OD_nodevelop")
+Mp5=c("Oahu_agro_final10.tif", "Oahu_develop_10.tif", "OA_nodevelop")
+Mp6=c("Maui_loi_int10_2.tif", "Maui_nui_develop_10.tif", "ML_nodevelop")
+Mp7=c("Maui_agro_final10.tif", "Maui_nui_develop_10.tif", "MA_nodevelop") 
+Mp8=c("Maui_dry_final10.tif", "Maui_nui_develop_10.tif", "MD_nodevelop")
+Mp9=c("Hawaii_loi_int10.tif", "Hawaii_develop_10.tif", "HL_nodevelop")
+Mp10=c("Hawaii_agro_final10.tif", "Hawaii_develop_10.tif", "HA_nodevelop")
+Mp11=c("Hawaii_dry_final10_2.tif", "Hawaii_develop_10.tif", "HD_nodevelop") #need to redo
+multi_var_all_lists=list(Mp1, Mp11)
+parallel_large_raster_multiplication=function(multiplication_raster_var_list){
+  raster1_name=raster(multiplication_raster_var_list[1])
+  raster2_name=raster(multiplication_raster_var_list[2])
+  output_raster_name=multiplication_raster_var_list[3]
+  tmp_raster=mask(raster1_name, raster2_name, inverse=T)
+  writeRaster(tmp_raster, output_raster_name, format='GTiff', compress="LZW", overwrite=T)  
+}
+multiplication_raster_var_list = multi_var_all_lists[1]
+for (multiplication_raster_var_list in multi_var_all_lists){
+  cat("doing ", multiplication_raster_var_list, "\n")
+  parallel_large_raster_multiplication(multiplication_raster_var_list)
+}
+
+KLND=raster("KL_nodevelop.tif")
+KAND=raster("KA_nodevelop.tif")
+OLND=raster("OL_nodevelop.tif")
+ODND=raster("OD_nodevelop.tif")
+OAND=raster("OA_nodevelop.tif")
+MLND=raster("ML_nodevelop.tif")
+MAND=raster("MA_nodevelop.tif")
+MDND=raster("MD_nodevelop.tif")
+HLND=raster("HL_nodevelop.tif")
+HAND=raster("HA_nodevelop.tif")
+HDND=raster("HD_nodevelop.tif")
+
+zonal(stack(KLND,KAND), slud1, 'count')
+zonal(stack(OLND,ODND,OAND), slud2, 'count')
+zonal(stack(MLND,MAND,MDND), slud3, 'count')
+zonal(stack(HLND,HAND,HDND), slud4, 'count')
+
+##A1B & Development
+Mp1=c("FKauai_loi_int10.tif", "Kauai_develop_10.tif", "KL_nodevelop_A1B") #need to do
+Mp2=c("FKauai_agro_final10.tif", "Kauai_develop_10.tif", "KA_nodevelop_A1B")
+Mp3=c("FOahu_loi_int10_2.tif","Oahu_develop_10.tif", "OL_nodevelop_A1B")
+Mp4=c("Oahu_fdry_final10.tif", "Oahu_develop_10.tif", "OD_nodevelop_A1B")
+Mp5=c("FOahu_agro_final10.tif", "Oahu_develop_10.tif", "OA_nodevelop_A1B")
+Mp6=c("FMaui_loi_int10_2.tif", "Maui_nui_develop_10.tif", "ML_nodevelop_A1B")
+Mp7=c("FMaui_agro_final10.tif", "Maui_nui_develop_10.tif", "MA_nodevelop_A1B") 
+Mp8=c("Maui_fdry_final10.tif", "Maui_nui_develop_10.tif", "MD_nodevelop_A1B")
+Mp9=c("FHawaii_loi_int10.tif", "Hawaii_develop_10.tif", "HL_nodevelop_A1B")
+Mp10=c("FHawaii_agro_final10.tif", "Hawaii_develop_10.tif", "HA_nodevelop_A1B")
+Mp11=c("Hawaii_fdry_final10.tif", "Hawaii_develop_10.tif", "HD_nodevelop_A1B")
+multi_var_all_lists=list(Mp1, Mp2, Mp3, Mp4, Mp5, Mp6, Mp7, Mp8, Mp9, Mp10, Mp11)
+parallel_large_raster_multiplication=function(multiplication_raster_var_list){
+  raster1_name=raster(multiplication_raster_var_list[1])
+  raster2_name=raster(multiplication_raster_var_list[2])
+  output_raster_name=multiplication_raster_var_list[3]
+  tmp_raster=mask(raster1_name, raster2_name, inverse=T)
+  writeRaster(tmp_raster, output_raster_name, format='GTiff', compress="LZW", overwrite=T)  
+}
+multiplication_raster_var_list = multi_var_all_lists[1]
+for (multiplication_raster_var_list in multi_var_all_lists){
+  cat("doing ", multiplication_raster_var_list, "\n")
+  parallel_large_raster_multiplication(multiplication_raster_var_list)
+}
+
+KLND_A1B=raster("KL_nodevelop_A1B.tif")
+KAND_A1B=raster("KA_nodevelop_A1B.tif")
+OLND_A1B=raster("OL_nodevelop_A1B.tif")
+ODND_A1B=raster("OD_nodevelop_A1B.tif")
+OAND_A1B=raster("OA_nodevelop_A1B.tif")
+MLND_A1B=raster("ML_nodevelop_A1B.tif")
+MAND_A1B=raster("MA_nodevelop_A1B.tif")
+MDND_A1B=raster("MD_nodevelop_A1B.tif")
+HLND_A1B=raster("HL_nodevelop_A1B.tif")
+HAND_A1B=raster("HA_nodevelop_A1B.tif")
+HDND_A1B=raster("HD_nodevelop_A1B.tif")
+
+zonal(stack(KLND_A1B,KAND_A1B), slud1, 'count')
+zonal(stack(OLND_A1B,ODND_A1B,OAND_A1B), slud2, 'count')
+zonal(stack(MLND_A1B,MAND_A1B,MDND_A1B), slud3, 'count')
+zonal(stack(HLND_A1B,HAND_A1B,HDND_A1B), slud4, 'count')
+
+####RCP45 & Development
+Mp1=c("Kauai_RCP45loi_int10.tif", "Kauai_develop_10.tif", "KL_nodevelop_45")
+Mp2=c("Kauai_RCP45agro_final10.tif", "Kauai_develop_10.tif", "KA_nodevelop_45")
+Mp3=c("Oahu_RCP45loi_int10.tif","Oahu_develop_10.tif", "OL_nodevelop_45")
+Mp4=c("FOahu_dry_final10_45.tif", "Oahu_develop_10.tif", "OD_nodevelop_45")
+Mp5=c("Oahu_RCP45agro_final10.tif", "Oahu_develop_10.tif", "OA_nodevelop_45")
+Mp6=c("Maui_RCP45loi_int10.tif", "Maui_nui_develop_10.tif", "ML_nodevelop_45")
+Mp7=c("Maui_nui_RCP45agro_final10.tif", "Maui_nui_develop_10.tif", "MA_nodevelop_45") 
+Mp8=c("FMaui_nui_dry_final10_45.tif", "Maui_nui_develop_10.tif", "MD_nodevelop_45")
+Mp9=c("Hawaii_RCP45loi_int10.tif", "Hawaii_develop_10.tif", "HL_nodevelop_45")
+Mp10=c("Hawaii_RCP45agro_final10.tif", "Hawaii_develop_10.tif", "HA_nodevelop_45")
+Mp11=c("FHawaii_dry_final10_45.tif", "Hawaii_develop_10.tif", "HD_nodevelop_45")
+multi_var_all_lists=list(Mp8, Mp9, Mp10, Mp11)
+parallel_large_raster_multiplication=function(multiplication_raster_var_list){
+  raster1_name=raster(multiplication_raster_var_list[1])
+  raster2_name=raster(multiplication_raster_var_list[2])
+  output_raster_name=multiplication_raster_var_list[3]
+  tmp_raster=mask(raster1_name, raster2_name, inverse=T)
+  writeRaster(tmp_raster, output_raster_name, format='GTiff', compress="LZW", overwrite=T)  
+}
+multiplication_raster_var_list = multi_var_all_lists[1]
+for (multiplication_raster_var_list in multi_var_all_lists){
+  cat("doing ", multiplication_raster_var_list, "\n")
+  parallel_large_raster_multiplication(multiplication_raster_var_list)
+}
+
+KLND_45=raster("KL_nodevelop_45.tif")
+KAND_45=raster("KA_nodevelop_45.tif")
+OLND_45=raster("OL_nodevelop_45.tif")
+ODND_45=raster("OD_nodevelop_45.tif")
+OAND_45=raster("OA_nodevelop_45.tif")
+MLND_45=raster("ML_nodevelop_45.tif")
+MAND_45=raster("MA_nodevelop_45.tif")
+MDND_45=raster("MD_nodevelop_45.tif")
+HLND_45=raster("HL_nodevelop_45.tif")
+HAND_45=raster("HA_nodevelop_45.tif")
+HDND_45=raster("HD_nodevelop_45.tif")
+
+zonal(stack(KLND_45,KAND_45), slud1, 'count')
+zonal(stack(OLND_45,ODND_45,OAND_45), slud2, 'count')
+zonal(stack(MLND_45,MAND_45,MDND_45), slud3, 'count')
+zonal(stack(HLND_45,HAND_45,HDND_45), slud4, 'count')
+
+####RCP85 & Development
+Mp1=c("Kauai_RCP85loi_int10.tif", "Kauai_develop_10.tif", "KL_nodevelop_85")
+Mp2=c("Kauai_RCP85agro_final10.tif", "Kauai_develop_10.tif", "KA_nodevelop_85")
+Mp3=c("Oahu_RCP85loi_int10.tif","Oahu_develop_10.tif", "OL_nodevelop_85")
+Mp4=c("FOahu_dry_final10_85.tif", "Oahu_develop_10.tif", "OD_nodevelop_85")
+Mp5=c("Oahu_RCP85agro_final10.tif", "Oahu_develop_10.tif", "OA_nodevelop_85")
+Mp6=c("Maui_nui_RCP85loi_int10.tif", "Maui_nui_develop_10.tif", "ML_nodevelop_85")
+Mp7=c("Maui_nui_RCP85agro_final10.tif", "Maui_nui_develop_10.tif", "MA_nodevelop_85") 
+Mp8=c("FMaui_nui_dry_final10_85.tif", "Maui_nui_develop_10.tif", "MD_nodevelop_85")
+Mp9=c("Hawaii_RCP85loi_int10.tif", "Hawaii_develop_10.tif", "HL_nodevelop_85")
+Mp10=c("Hawaii_RCP85agro_final10.tif", "Hawaii_develop_10.tif", "HA_nodevelop_85")
+Mp11=c("FHawaii_dry_final10_85.tif", "Hawaii_develop_10.tif", "HD_nodevelop_85")
+multi_var_all_lists=list(Mp2, Mp5, Mp6, Mp7, Mp8, Mp9, Mp10, Mp11)
+parallel_large_raster_multiplication=function(multiplication_raster_var_list){
+  raster1_name=raster(multiplication_raster_var_list[1])
+  raster2_name=raster(multiplication_raster_var_list[2])
+  output_raster_name=multiplication_raster_var_list[3]
+  tmp_raster=mask(raster1_name, raster2_name, inverse=T)
+  writeRaster(tmp_raster, output_raster_name, format='GTiff', compress="LZW", overwrite=T)  
+}
+multiplication_raster_var_list = multi_var_all_lists[1]
+for (multiplication_raster_var_list in multi_var_all_lists){
+  cat("doing ", multiplication_raster_var_list, "\n")
+  parallel_large_raster_multiplication(multiplication_raster_var_list)
+}
+
+KLND_85=raster("KL_nodevelop_85.tif")
+KAND_85=raster("KA_nodevelop_85.tif")
+OLND_85=raster("OL_nodevelop_85.tif")
+ODND_85=raster("OD_nodevelop_85.tif")
+OAND_85=raster("OA_nodevelop_85.tif")
+MLND_85=raster("ML_nodevelop_85.tif")
+MAND_85=raster("MA_nodevelop_85.tif")
+MDND_85=raster("MD_nodevelop_85.tif")
+HLND_85=raster("HL_nodevelop_85.tif")
+HAND_85=raster("HA_nodevelop_85.tif")
+HDND_85=raster("HD_nodevelop_85.tif")
+
+zonal(stack(KLND_85,KAND_85), slud1, 'count')
+zonal(stack(OLND_85,ODND_85,OAND_85), slud2, 'count')
+zonal(stack(MLND_85,MAND_85,MDND_85), slud3, 'count')
+zonal(stack(HLND_85,HAND_85,HDND_85), slud4, 'count')
+
+
+```
+
